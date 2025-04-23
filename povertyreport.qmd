@@ -1,0 +1,347 @@
+---
+title: "Moderate Poverty: A Global Challenge"
+format:
+  html:
+    toc: true
+    toc-depth: 3        # Adjust based on heading levels you want
+    toc-title: "Contents"  # Optional custom title
+    embed-resources: true
+    code-fold: true
+    theme: cosmo
+jupyter: python3
+---
+
+<div style="text-align: left; margin-top: 10px;">
+  <p style="font-size: 1.1rem; font-weight: 500; margin: 0;">Author: <strong>Sachdev Sajith</strong></p>
+  <p style="font-size: 1.1rem; margin: 0;">Published: <strong>April 23, 2025</strong></p>
+</div>
+
+<div style="text-align: center; margin-top: 20px;">
+
+<img src="./images/unicef_icon.png" width="80px" alt="Unicef Icon"/>
+
+<hr/>
+
+<div style="display: flex; justify-content: center; gap: 50px; margin-top: 30px;">
+
+<div style="flex: 1; text-align: center;">
+  
+<h3 style="color: #007bff;"><strong>INSIGHT</strong></h3>
+<p>
+Moderate poverty, defined as living under $3.20/day (PPP), affects millions globally — especially in Africa, South Asia, and parts of Latin America.
+</p>
+</div>
+
+<div style="flex: 1; text-align: center;">
+  
+<h3 style="color: #007bff;"><strong>GOAL</strong></h3>
+<p>
+Through data analysis, we highlight poverty hotspots, trends over time, and correlations with GDP to drive awareness and targeted intervention.
+</p>
+</div>
+
+</div>
+
+<hr/>
+
+<h3 style="color: #007bff; text-align: center;"><strong>Why This Matters</strong></h3>
+
+<p style="text-align: center;">
+Moderate poverty is not merely an economic threshold — it reflects barriers to education, health, opportunity, and dignity.
+</p>
+<p style="text-align: center;">
+This report explores UNICEF-backed data to visualize how poverty affects human development across countries and time.
+</p>
+<p style="font-weight: bold; text-align: center;">
+Together, through data and action, we can drive more equitable progress worldwide.
+</p>
+
+</div>
+
+
+
+# Understanding Moderate Poverty
+
+Moderate poverty is defined as living on less than $3.20 per day, adjusted for purchasing power parity (PPP). This threshold, established by the World Bank, represents the minimum income level needed to meet basic needs such as food, shelter, and essential services in many developing countries. While it is less severe than extreme poverty (measured at $1.90 per day), moderate poverty still reflects significant deprivation and vulnerability.
+
+Millions of people around the world live in moderate poverty, often struggling to access stable employment, quality healthcare, and education. These conditions not only affect individual well-being but also hinder economic development and social mobility at a national level. Moderate poverty is particularly concentrated in low- and middle-income countries, although pockets of it persist even in more developed regions.
+
+This report draws on UNICEF data to provide a comprehensive analysis of moderate poverty across countries and over time. Using Python and the Plotnine visualization library, we examine where poverty is most prevalent, how it changes over time, and how it correlates with key economic indicators like GDP per capita. Our goal is to highlight global patterns, regional disparities, and areas where progress is urgently needed to ensure more equitable development.
+
+---
+
+## Data Preparation
+
+The dataset used in this report originates from UNICEF’s global monitoring efforts and contains annual records of moderate poverty rates for a wide range of countries. Moderate poverty is defined as living on less than $3.20 per day, adjusted for purchasing power parity. The dataset spans multiple years, allowing for both cross-sectional and longitudinal analysis. Additional indicators such as GDP per capita were included to explore the economic context of poverty. The data was cleaned and standardized to ensure consistency across countries and time periods, including renaming key columns and removing rows with missing values for analysis.
+
+```{python}
+import polars as pl
+
+pl_df = pl.read_csv(
+    "merged_unicef_data.csv",
+    schema_overrides={
+        "Population, total": pl.Float64,
+        "GDP per capita (constant 2015 US$)": pl.Float64,
+        "GNI (current US$)": pl.Float64,
+        "Inflation, consumer prices (annual %)": pl.Float64,
+        "Life expectancy at birth, total (years)": pl.Float64,
+        "Military expenditure (% of GDP)": pl.Float64,
+        "Fossil fuel energy consumption (% of total)": pl.Float64,
+        "GDP growth (annual %)": pl.Float64,
+        "Birth rate, crude (per 1,000 people)": pl.Float64,
+        "Hospital beds (per 1,000 people)": pl.Float64,
+    }
+)
+
+# Rename columns for consistency
+pl_df = pl_df.rename({
+    "country": "country",
+    "obs_value": "obs_value",
+    "year": "year",
+    "GDP per capita (constant 2015 US$)": "GDP"
+})
+
+# Convert to Pandas for Plotnine/GeoPandas
+df = pl_df.to_pandas()
+
+```
+
+---
+
+## Top 10 Countries by Average Poverty
+
+This section highlights the countries with the highest average moderate poverty rates over the available time span. By computing the mean poverty rate for each country across all years, we identify persistent poverty hotspots. Unsurprisingly, the top 10 countries are predominantly located in sub-Saharan Africa—a region that continues to struggle with structural poverty due to limited access to education, infrastructure, and stable employment. This ranking sets the stage for understanding where the challenge of poverty is most entrenched.
+
+```{python}
+import polars as pl
+import geopandas as gpd
+from plotnine import *
+
+# Load world shapefile and region info
+world = gpd.read_file("ne_110m_admin_0_countries.shp")[["NAME", "CONTINENT"]]
+world = world.rename(columns={"NAME": "country"})
+
+# Merge with your df
+df = df.merge(world, on="country", how="left").rename(columns={"CONTINENT": "region"})
+
+# Compute top 10 countries
+top10 = (
+    df.groupby(["country", "region"], as_index=False)["obs_value"]
+      .mean()
+      .nlargest(10, "obs_value")
+)
+top10["label"] = top10["obs_value"].round(1).astype(str)
+
+# Build plot
+(
+    ggplot(top10, aes(x='reorder(country, obs_value)', y='obs_value', fill='region')) +
+    geom_bar(stat='identity') +
+    geom_text(aes(label='label'), nudge_y=1.5, size=6, ha='left', color='black') +
+    coord_flip() +
+    scale_fill_brewer(type='seq', palette='Blues', name='Region') +
+    labs(title='Top 10 Countries by Average Moderate Poverty Rate',
+         x='Country', y='Average Poverty Rate (%)') +
+    theme_minimal()
+)
+```
+
+## Average Moderate Poverty by Country
+
+The map below presents a global snapshot of average moderate poverty rates by country. Countries are color-coded according to their poverty burden, with darker shades indicating higher rates. The geographic disparities are immediately visible: most of Africa, parts of South Asia, and some areas of Latin America exhibit persistently high poverty levels. In contrast, Europe and North America show considerably lower averages. This visual helps reinforce the idea that poverty is not evenly distributed, but rather deeply tied to geography, development status, and historical inequities.
+
+```{python}
+#| fig-width: 10
+#| fig-height: 8
+
+import polars as pl
+import pandas as pd
+import geopandas as gpd
+from plotnine import (
+    ggplot, aes, geom_polygon, coord_equal,
+    scale_fill_gradient, labs, theme_minimal,
+    theme, element_text
+)
+
+# --- Compute title years from Polars ---
+start_year = pl_df.select(pl.col("year").min()).item()
+end_year   = pl_df.select(pl.col("year").max()).item()
+title_str = f"Average Moderate Poverty Rate by Country ({start_year}–{end_year})"
+
+# --- Compute avg poverty per country (in Polars) ---
+avg_pov = (
+    pl_df
+    .group_by("country")
+    .agg(pl.col("obs_value").mean().alias("avg_poverty"))
+    .to_pandas()
+)
+
+# --- Load shapefile for world map ---
+world = gpd.read_file("ne_110m_admin_0_countries.shp")
+world = world.rename(columns={"NAME": "country"})
+
+# --- Merge with world geometry ---
+map_data = world.merge(avg_pov, on="country", how="left")
+map_data = map_data.explode(index_parts=False)
+
+# --- Get polygon coordinates for Plotnine ---
+map_data["coords"] = map_data.geometry.apply(
+    lambda geom: list(geom.exterior.coords) if geom and hasattr(geom, "exterior") else []
+)
+map_long = map_data.explode("coords")
+map_long[["long", "lat"]] = pd.DataFrame(map_long["coords"].tolist(), index=map_long.index)
+
+# --- Plot choropleth ---
+(
+    ggplot(map_long, aes(x="long", y="lat", group="country", fill="avg_poverty")) +
+    geom_polygon(color="white", size=0.1) +
+    coord_equal() +
+    scale_fill_gradient(
+        name="Avg Poverty (%)",
+        low="lightblue", high="darkred",
+        na_value="lightgrey"
+    ) +
+    labs(title=title_str, x="", y="") +
+    theme_minimal() +
+    theme(
+        plot_title=element_text(size=18),
+        figure_size=(9, 8)
+        
+    )
+)
+
+```
+
+## Scatterplot – Poverty vs GDP 
+
+This scatterplot investigates the relationship between economic development and moderate poverty. Each point represents a single country in a specific year, with GDP per capita on a logarithmic scale. A clear negative relationship emerges: countries with higher income levels tend to experience lower poverty rates. This supports the well-established notion that economic growth plays a crucial role in reducing poverty, but also raises questions about inclusivity, as some nations with growing GDP still report high poverty levels. The regression line offers a helpful estimate of this overall trend.
+
+```{python}
+#| fig-width: 8
+#| fig-height: 6
+
+import polars as pl
+import pandas as pd
+from plotnine import (
+    ggplot, aes, geom_point, geom_smooth, scale_x_log10,
+    labs, theme_minimal
+)
+
+# --- Filter and clean using Polars ---
+scatter_df = (
+    pl_df
+    .filter(
+        (pl.col("obs_value").is_not_null()) &
+        (pl.col("GDP").is_not_null()) &
+        (pl.col("GDP") > 500) &
+        (pl.col("GDP") < 20000)
+    )
+    .select(["GDP", "obs_value"])  # only columns needed for plotting
+    .to_pandas()
+)
+
+# --- Plot ---
+(
+    ggplot(scatter_df, aes(x='GDP', y='obs_value')) +
+    geom_point(alpha=0.6) +
+    geom_smooth(method='lm', color='blue') +
+    scale_x_log10() +
+    labs(
+        title='Moderate Poverty vs GDP per Capita',
+        x='GDP per Capita (USD, log scale)',
+        y='Poverty Rate (%)'
+    ) +
+    theme_minimal()
+)
+```
+
+---
+## Time-Series – Average Poverty by Continent
+
+Here, we analyze how moderate poverty has evolved over time at the continental level. By grouping countries by continent and averaging their annual poverty rates, we reveal broader regional trends. Africa shows the highest and most persistent levels of poverty, with only slight declines in recent years. Asia, on the other hand, demonstrates steady improvement, particularly in countries like India and Vietnam. The Americas and Europe maintain relatively lower levels, reflecting stronger social infrastructure and economic stability. These patterns highlight how economic development, governance, and investment priorities influence poverty reduction over time.
+
+```{python}
+import polars as pl
+import geopandas as gpd
+from plotnine import (
+    ggplot, aes, geom_line, labs,
+    theme_minimal, theme, element_text,
+    scale_color_brewer
+)
+
+# Load continent data from shapefile using GeoPandas
+world = gpd.read_file("ne_110m_admin_0_countries.shp")
+continent_df = pl.DataFrame({
+    "country": world["NAME"],
+    "continent": world["CONTINENT"]
+})
+
+# Join continent info with main dataset
+df_with_continent = (
+    pl_df
+    .join(continent_df, on="country", how="left")
+    .drop_nulls(["obs_value", "continent", "year"])
+)
+
+# Group and aggregate using Polars
+cont_pov = (
+    df_with_continent
+    .group_by(["continent", "year"])
+    .agg(pl.col("obs_value").mean().alias("avg_poverty"))
+    .sort(["continent", "year"])
+    .to_pandas()
+)
+
+# Plot with Plotnine
+(
+    ggplot(cont_pov, aes(x='year', y='avg_poverty', color='continent')) +
+    geom_line(size=1.5) +
+    scale_color_brewer(type='qual', palette='Set1', name='Continent') +
+    labs(
+        title='Average Moderate Poverty Over Time by Continent',
+        x='Year', y='Average Poverty Rate (%)'
+    ) +
+    theme_minimal() +
+    theme(
+        plot_title   = element_text(size=14),
+        axis_title   = element_text(size=14),
+        axis_text    = element_text(size=10),
+        legend_title = element_text(size=12),
+        legend_text  = element_text(size=10)
+    )
+)
+
+
+```
+
+```{python}
+from plotnine import (
+    ggplot, aes, geom_line, facet_wrap, labs,
+    theme_minimal, theme, element_text,
+    scale_color_brewer
+)
+
+(
+    ggplot(cont_pov, aes(x='year', y='avg_poverty', color='continent')) +
+    geom_line(size=1) +
+    facet_wrap("continent", ncol=6, scales='free_y') +  # key: ncol=6, scales='free_y'
+    scale_color_brewer(type='qual', palette='Set1', name='Continent') +
+    labs(
+        title='Average Moderate Poverty Over Time by Continent',
+        x='Year', y='Average Poverty Rate (%)'
+    ) +
+    theme_minimal() +
+    theme(
+        plot_title=element_text(size=14),
+        axis_title=element_text(size=12),
+        axis_text=element_text(size=9),
+        strip_text=element_text(size=11),
+        legend_position='none'
+    )
+)
+ 
+
+```
+
+## Conclusion
+
+This report provides a multi-dimensional analysis of moderate poverty across the globe, using UNICEF data to explore geographic patterns, economic correlations, and temporal trends. The findings reveal that poverty is not only persistent in specific regions—particularly sub-Saharan Africa—but also closely tied to broader socioeconomic conditions like GDP per capita. While global poverty has generally declined over the past two decades, progress has been uneven, and many countries continue to face deep structural challenges. Reducing moderate poverty further will require not just economic growth, but also inclusive development strategies, social safety nets, and long-term policy commitment at both national and international levels. The insights in this report can support data-driven decision-making aimed at achieving more equitable outcomes for vulnerable populations.
